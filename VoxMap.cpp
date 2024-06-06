@@ -1,11 +1,17 @@
 #include "VoxMap.h"
 #include "Errors.h"
 #include <iostream>
+#include <fstream>
 #include <queue>
+#include <cstdio>
 using namespace std;
 
 bool VoxMap::isValid(Point p) const {
   return (p.x < bounds.x && p.y < bounds.y && p.z < bounds.z) && (p.x >= 0 && p.y >= 0 && p.z >= 0);
+}
+
+bool VoxMap::isValid(int z, int y, int x) const {
+  return (x < bounds.x && y < bounds.y && z < bounds.z) && (x >= 0 && y >= 0 && z >= 0);
 }
 
 bool VoxMap::validSource(Voxel p) const{
@@ -20,7 +26,13 @@ bool VoxMap::validSource(Voxel p) const{
 
 
 VoxMap::Voxel& VoxMap::operator[] (Point p) {
-  if (!isValid(p)) throw InvalidPoint(p);
+  Point use(p.z, p.y, p.z);
+  if (!isValid(use)) throw InvalidPoint(use);
+  return map[p.z][p.y][p.x];
+}
+
+VoxMap::Voxel& VoxMap::at(Point p) {
+  Point use(p.z, p.y, p.z);
   return map[p.z][p.y][p.x];
 }
 
@@ -178,18 +190,22 @@ VoxMap::VoxMap(std::istream& stream) {
       }
     }
   }
-  // for(int i = 0; i < bounds.z; i++){
-  //   for(int j = 0; j < bounds.y; j++){
-  //     for(int k = 0; k < bounds.x; k++){
-  //       cout << map[i][j][k].fall << " ";
-  //     }
-  //     cout << endl;
-  //   }
-  //   cout << endl;
-  // }
-}
 
-VoxMap::~VoxMap() {
+//   fstream log;
+//   log.open("./path.log", ios::out | ios::trunc);
+
+//    for(int i = 0; i < bounds.z; i++){
+//      for(int j = 0; j < bounds.y; j++){
+//        for(int k = 0; k < bounds.x; k++){
+//         if (map[i][j][k].fall == -1){
+//           log << map[i][j][k].self.x << " " << map[i][j][k].self.y << " " << map[i][j][k].self.z << endl;
+//        }
+//     }
+//    }
+//    }
+ }
+
+VoxMap::~VoxMap(){
   // FIXME
   for (int i = 0; i < bounds.z; i++) {
     for (int j = 0; j < bounds.y; j++){
@@ -200,66 +216,165 @@ VoxMap::~VoxMap() {
   delete[] map; 
 }
 
-void VoxMap::mark(Voxel& at, const Direction &from, const char &sign, queue<Voxel> &q) {
-  at.path_sign = sign;
+void VoxMap::mark(Voxel& at, const Direction &from, const Tracker &new_state, queue<Voxel> &q) {
+  at.state = new_state;
   at.dir = from;
   if (at.fall == 0) q.push(at);
 }
 
 Route VoxMap::route(Point src, Point dst) {
-  if(!isValid(src)){
+  if(!isValid(src) || map[src.z][src.y][src.x].fall > 0 || map[src.z][src.y][src.x].fall < 0 ){
     throw InvalidPoint(src);
   }
-  if(!validSource(map[src.z][src.y][src.x])){
-    //cout << "Z: " << src.z << " Y: " << src.y << " X: " << src.x << endl;
-    throw InvalidPoint(src);
-  }
-  if(!isValid(dst)){
-    throw InvalidPoint(dst);
-  }
-  if(!validSource(map[dst.z][dst.y][dst.x])){
+  if(!isValid(dst) || map[dst.z][dst.y][dst.x].fall > 0 || map[dst.z][dst.y][dst.x].fall < 0 ){
     throw InvalidPoint(dst);
   }
 
-  queue<Voxel> source;
-  queue<Voxel> target;
+  queue<Voxel*> source;
+  queue<Voxel*> target;
   bool found = false;
-  mark((*this)[src], START, '$', source);
-  mark((*this)[dst], END, '#', target);
+
+  remove("./path.log");
+
+  fstream log;
+  log.open("./path.log", ios::out);
+  log << src.x << " " << src.y << " " << src.z << endl;
+
+  Voxel* start = &at(src);
+  start->state = SOURCE;
+  source.push(start);
+
+  Voxel* end = &at(dst);
+  end->state = TARGET;
+  target.push(end);
 
   while (!found) {
     if (source.empty()) throw NoRoute(src, dst);
-    Voxel parent = source.front();
+    Voxel* parent = source.front();
     source.pop();
 
-    for (Direction d = Direction::_NORTH; d < 4; d = Direction(d + 1)) {
-    Voxel curr = (*this)[parent.self.inc(d)];
-      try {
-        if (curr.fall == 0) {
-          if (curr.dir == DEFAULT) {
-            mark(curr, d, '$', source);
-          }
-          else if (curr.path_sign != '$') {
-            found = true;
-            source.push(curr);
-            break;
-          }
-        }
-        else if (curr.fall > 0 && curr.fall < 50000) {
-          mark(curr, d, '$', source);
-          curr = (*this)[{curr.self.z - curr.fall, curr.self.y, curr.self.x}];
-          mark(curr, Direction::DOWN, '$', source);
-        }
-        else if (curr.fall == -1 && (*this)[parent.self.inc(UP)].fall >= 0 && (*this)[curr.self.inc(UP)].fall == 0) {
-          curr = (*this)[curr.self.inc(UP)];
-          mark(curr, d, '$', source);
-        }
-      } catch (const InvalidPoint &e) {
-        continue;
+    for (Direction d = Direction::_NORTH; d < 4; d = Direction(d+1)) {
+
+      // Valid move ?
+      Point inc = parent->self.inc(d);
+      if (!isValid(inc)) continue;
+      Voxel* curr = &at(inc);
+      if (curr->fall == -1 || curr->fall >= 50000) continue;
+
+      if (curr->fall > 0) {
+        curr->state = SOURCE;
+        curr->dir = d;
+        curr = &at({curr->self.x, curr->self.y, curr->self.z - curr->fall});
+          
       }
+
+      // Valid push / have we found a Target path
+      if (curr->state == TARGET) {
+        source.push(curr);
+        found = true;
+        cout << "found" << endl;
+        break;
+      }
+      if (curr->state == SOURCE) continue;
+
+      log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
+
+      //Add to queue
+      curr->state = SOURCE;
+      curr->dir = d;
+      source.push(curr);
+      
     }
 
   }
+  
 
+
+  // mark((*this)[src], START, '$', source);
+  // mark((*this)[dst], END, '#', target);
+  // while(!found && !source.empty()){
+  //   Voxel parent = source.front();
+  //   source.pop();
+
+  //   for(Direction d = Direction::_NORTH; d < 4; d = Direction(d+1)){
+  //     if(isValid(parent.self.inc(d).z,parent.self.inc(d).y,parent.self.inc(d).x)){
+  //       Voxel curr = (*this)[parent.self.inc(d)];
+  //       // land in front is flat
+  //       if(curr.fall == 0){
+  //         if(curr.path_sign == 'x'){
+  //           mark(curr,d,'$',source);
+  //         }
+  //         else if(curr.path_sign == '#'){
+  //           found = true;
+  //           source.push(curr);
+  //           cout << "Found!" << endl;
+  //           break;
+  //         }
+  //       }
+        
+  //     }
+
+  //   }
+  // }
+
+ 
   throw NoRoute(src, dst);
 }
+
+
+
+//  while (!found && !source.empty()) {
+//     cout << source.front().self.x << endl;
+//     Voxel parent = source.front();
+//     source.pop();
+
+//     for (Direction d = Direction::_NORTH; d < 4; d = Direction(d + 1)) {
+//       if(isValid(parent.self.inc(d))){
+//       Voxel curr = (*this)[parent.self.inc(d)];
+//           try {
+//             if (curr.fall == 0) {
+//               if (curr.dir == DEFAULT) {
+//                 mark(curr, d, '$', source);
+//               }
+//               else if (curr.path_sign == '#') {
+//                 found = true;
+//                 source.push(curr);
+//                 break;
+//               }
+//             }
+//             else if (curr.fall > 0 && curr.fall < 50000) {
+//               if(curr.dir == DEFAULT){
+//                 mark(curr, d, '$', source);
+//                 if(isValid((curr.self.z - curr.fall), curr.self.y, curr.self.x)){
+//                   curr = (*this)[{curr.self.z - curr.fall, curr.self.y, curr.self.x}];
+//                   mark(curr, Direction::DOWN, '$', source);
+//                 }
+//               }
+//               else if (curr.path_sign == '#' && isValid((curr.self.z - curr.fall), curr.self.y, curr.self.x) && map[(curr.self.z - curr.fall)][curr.self.y][curr.self.x].path_sign == '#') {
+//                 found = true;
+//                 source.push(curr);
+//                 break;
+//               }
+//             }
+//             else if(isValid(curr.self.inc(UP)) && isValid(parent.self.inc(UP))){
+//               if (curr.fall == -1 && (*this)[curr.self.inc(UP)].fall == 0 && (*this)[parent.self.inc(UP)].fall >= 0){
+
+//                 curr = (*this)[curr.self.inc(UP)];
+//                 if(curr.dir == DEFAULT){
+//                   mark(curr, d, '$', source);
+//                 }
+//                 else if (curr.path_sign == '#') {
+//                   found = true;
+//                   source.push(curr);
+//                   break;
+//                 }
+//               }
+//             }
+//           } catch (const InvalidPoint &e) {
+//             continue;
+//           }
+//       }
+//   }
+
+//   }
+//   if (source.empty()) throw NoRoute(src, dst);

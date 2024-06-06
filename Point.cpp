@@ -3,25 +3,25 @@
 Point Point::inc(const Direction &dir) const {
   switch (dir) {
     case UP:
-      return {z + 1, y, x};
+      return {x, y, z + 1};
       break;
     case DOWN:
-      return {z - 1, y, x};
+      return {x, y, z - 1};
       break;
     case _NORTH:
-      return {z, y + 1, x};
+      return {x, y - 1, z};
       break;
     case _SOUTH:
-      return {z, y - 1, x};
+      return {x, y + 1, z};
       break;
     case _WEST:
-      return {z, y, x + 1};
+      return {x - 1, y, z};
       break;
     case _EAST:
-      return {z, y, x - 1};
+      return {x + 1, y, z};
       break;
     default:
-      return {z, y, x};
+      return {x, y, z};
   }
 }
 
