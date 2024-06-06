@@ -4,8 +4,6 @@
 #include <iostream>
 
 enum Direction {
-  START = -3,
-  END = -2,
   DEFAULT = -1,
   _NORTH = 0,
   _SOUTH = 1,
