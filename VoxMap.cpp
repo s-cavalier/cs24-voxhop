@@ -283,7 +283,16 @@ Route VoxMap::route(Point src, Point dst) {
   visited.push_front(end);
 
   while (!found) {
-    if (source.empty()) throw NoRoute(src, dst);
+    if (source.empty()){
+      while (!visited.empty()) {
+      Voxel* clear = visited.front();
+      visited.pop_front();
+
+      clear->state = UNSEEN;
+      clear->dir = DEFAULT;
+      }
+     throw NoRoute(src, dst);
+    }
     Voxel* parent = source.front();
     source.pop();
 
@@ -297,7 +306,10 @@ Route VoxMap::route(Point src, Point dst) {
       Voxel* curr = &at(inc);
       if (curr->fall >= 50000) continue;
       if (curr->state == SOURCE) continue;
-
+      // cout << curr->self.inc(UP).z << " " << curr->self.inc(UP).y << " " << curr->self.inc(UP).x << endl;
+      // cout << "Valid: " << isValid(curr->self.inc(UP)) << endl;
+      // cout << (curr->self.inc(UP).z < bounds.z) << endl;
+      // cout << bounds.z << " Y: " << bounds.y << endl;
       if (isValid(curr->self.inc(UP)) && curr->fall == -1 && (at(curr->self.inc(UP)).fall == 0 && at(parent->self.inc(UP)).fall >= 1)) {
         curr = &at(curr->self.inc(UP));
       } else if (curr->fall == -1) continue;
@@ -306,7 +318,7 @@ Route VoxMap::route(Point src, Point dst) {
       if (curr->fall > 0) {
         curr->state = SOURCE;
         curr->dir = d;
-        //visited.push_front(curr);
+        visited.push_front(curr);
         curr = &at({curr->self.x, curr->self.y, curr->self.z - curr->fall});
         d = DOWN;
       }
@@ -322,17 +334,13 @@ Route VoxMap::route(Point src, Point dst) {
         break;
       }
 
-      if (d == _NORTH) log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=north]" << endl;
-      if (d == _SOUTH) log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=south]" << endl;
-      if (d == _EAST) log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=east]" << endl;
-      if (d == _WEST) log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=west]" << endl;
-      if (d == DOWN) log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " redstone_block" << endl;
+      //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
 
       //Add to queue
       curr->state = SOURCE;
       curr->dir = d;
       source.push(curr);
-      //visited.push_front(curr);
+      visited.push_front(curr);
     }
 
   }
@@ -347,8 +355,6 @@ Route VoxMap::route(Point src, Point dst) {
     if (curr->dir == DOWN) {
       //fell = true;
       for (curr = curr; curr->dir < 0 || curr->dir > 3; curr = &at(curr->self.inc(UP)));
-      //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " redstone_block" << endl;
-      
     }
 
 
@@ -356,28 +362,28 @@ Route VoxMap::route(Point src, Point dst) {
     switch (curr->dir) {
       case _NORTH:
         route.push_front(NORTH);
-        //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=north]" << endl;
         curr = &at(curr->self.inc(_SOUTH));
+        log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
         if (curr->fall >= 1) curr = &at(curr->self.inc(DOWN));
         break;
       case _SOUTH:
         route.push_front(SOUTH);
-        //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=south]" << endl;
         curr = &at(curr->self.inc(_NORTH));
+        log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
         if (curr->fall >= 1) curr = &at(curr->self.inc(DOWN));
         break;
       case _EAST:
         route.push_front(EAST);
-        //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=east]" << endl;
-        curr = &at(curr->self.inc(_WEST));
         //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
+        curr = &at(curr->self.inc(_WEST));
+        log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
         if (curr->fall >= 1) curr = &at(curr->self.inc(DOWN));
         break;
       case _WEST:
         route.push_front(WEST);
-        //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << " magenta_glazed_terracotta[facing=west]" << endl;
-        curr = &at(curr->self.inc(_EAST));
         //log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
+        curr = &at(curr->self.inc(_EAST));
+        log << curr->self.x << " " << curr->self.y << " " << curr->self.z << endl;
         if (curr->fall >= 1) curr = &at(curr->self.inc(DOWN));
         break;
       default:
@@ -386,7 +392,7 @@ Route VoxMap::route(Point src, Point dst) {
     }
   }
 
-/*
+
   while (!visited.empty()) {
     Voxel* clear = visited.front();
     visited.pop_front();
@@ -394,7 +400,7 @@ Route VoxMap::route(Point src, Point dst) {
     clear->state = UNSEEN;
     clear->dir = DEFAULT;
   }
- */
+ 
   log.close();
 
   return Route(route.begin(), route.end());
