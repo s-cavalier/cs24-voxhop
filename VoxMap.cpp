@@ -405,6 +405,3 @@ Route VoxMap::route(Point src, Point dst) {
 
   return Route(route.begin(), route.end());
 }
-
-
-
